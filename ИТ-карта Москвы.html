@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>IT карта Москвы</title>
+  <style>
+    body {margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;}
+    #sidebar {width: 380px;
+      border-right: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;}
+    #filters {padding: 10px;
+      border-bottom: 1px solid #ddd;
+      font-size: 13px;}
+    #filters input,
+    #filters select {width: 100%;
+      margin: 4px 0 8px 0;
+      padding: 4px 6px;
+      font-size: 12px;}
+    #stats {font-size: 12px;
+      margin-top: 4px;
+      color: #555;}
+    #listContainer {flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      background: #fafafa;}
+    .place-item {border-radius: 4px;
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      background: #fff;
+      cursor: pointer;
+      transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
+      font-size: 12px;}
+    .place-item:hover {background: #f0f7ff;
+      box-shadow: 0 0 4px rgba(0,0,0,0.08);
+      border-color: #2196F3;}
+    .place-item.active {background: #e3f2fd;
+      border-color: #1976D2;
+      box-shadow: 0 0 4px rgba(25,118,210,0.4);}
+    .place-item-title {font-weight: 600;
+      color: #2196F3;
+      margin-bottom: 2px;
+      font-size: 13px;}
+    .place-item-type {color: #555;
+      margin-bottom: 2px;}
+    .place-item-address {color: #333;
+      margin-bottom: 2px;}
+    .place-item-contacts {color: #555;
+      font-size: 11px;
+      margin-bottom: 2px;}
+    .place-item-website {font-size: 11px;}
+    .place-item-website a {color: #1565C0;
+      text-decoration: none;}
+    .place-item-website a:hover {
+      text-decoration: underline;}
+    #detailsCard {border-top: 1px solid #ddd;
+      padding: 8px 10px;
+      font-size: 12px;
+      background: #fff;}
+    #map {flex: 1;}
+  </style>
+  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
+</head>
+<body>
+  <div id="sidebar">
+    <div id="filters">
+      <input
+        id="searchInput"
+        type="text"
+        placeholder="Поиск по названию, адресу, контактам"/>
+      <select id="typeFilter">
+        <option value="">Все типы</option>
+        <option value="офис">ИТ офисы</option>
+        <option value="музей">ИТ музеи</option>
+        <option value="технопарк">Технопарки / Инновационные центры</option>
+        <option value="площадка">Образовательные площадки</option>
+      </select>
+      <div id="stats">Найдено: 0 мест</div>
+    </div>
+    <div id="listContainer"></div>
+    <div id="detailsCard">Выберите объект на карте или в списке.</div>
+  </div>
+  <div id="map"></div>
+  <script>
+    const places = [ 
+	  { name: "Офис Яндекса",
+        type: "офис",
+        level: "компания",
+        coords: [55.7322, 37.5889],
+        address: "Москва, ул. Льва Толстого, д. 16",
+        contacts: "Тел.: +7 495 739 70 00",
+        website: "https://yandex.ru/" },
+      { name: "Офис VK",
+        type: "офис",
+        level: "компания",
+        coords: [55.7320, 37.5885],
+        address: "Москва, ул. Льва Толстого, д. 16",
+        contacts: "Тел.: +7 495 739 70 00",
+        website: "https://vk.com/" },
+      { name: "Офис Сбера",
+        type: "офис",
+        level: "компания",
+        coords: [55.7547, 37.6292],
+        address: "Москва, Кутузовский пр-т, д. 32, корп. 1",
+        contacts: "Тел.: +7 495 500 55 50",
+        website: "https://sberbank.ru/" },
+      { name: "Офис МТС Digital",
+        type: "офис",
+        level: "компания",
+        coords: [55.7606, 37.6117],
+        address: "Москва, ул. Марксистская, д. 4, стр. 1",
+        contacts: "Тел.: +7 495 766 01 66",
+        website: "https://mts.ru/" },
+      { name: "Офис Тинькофф",
+        type: "офис",
+        level: "компания",
+        coords: [55.7444, 37.6222],
+        address: "Москва, 2-й Казачий пер., д. 11, стр. 1",
+        contacts: "Тел.: +7 495 645 59 19",
+        website: "https://tinkoff.ru/" },
+      { name: "Офис Лаборатории Касперского",
+        type: "офис",
+        level: "компания",
+        coords: [55.8047, 37.6164],
+        address: "Москва, Ленинградское ш., д. 39А, стр. 2",
+        contacts: "Тел.: +7 495 797 87 00",
+        website: "https://kaspersky.ru/" },
+      { name: "Офис Ростелеком",
+        type: "офис",
+        level: "компания",
+        coords: [55.7581, 37.6153],
+        address: "Москва, ул. Гончарная, д. 30, стр. 1",
+        contacts: "Тел.: +7 800 200 00 78",
+        website: "https://rt.ru/" },
+      {name: "Офис компании Crok",
+        type: "офис",
+        level: "компания",
+        coords: [55.7472, 37.6211],
+        address: "Москва, ул. Садовая-Спасская, д. 21/1 (БЦ «Садовая Плаза»)",
+        contacts: "Тел.: +7 495 123 45 67",
+        website: "https://crok.ru/" },
+      { name: "Офис компании 1C",
+        type: "офис",
+        level: "компания",
+        coords: [55.7611, 37.5883],
+        address: "Москва, Ленинградский пр‑т, д. 72, корп. 3 (БЦ «Алкон II»)",
+        contacts: "Тел.: +7 495 737‑97‑77",
+        website: "https://1c.ru/" },
+      { name: "Офис СКБ Контур",
+        type: "офис",
+        level: "компания",
+        coords: [55.7558, 37.6176],
+        address: "Москва, ВДНХ, пр-т Мира, д. 119 (павильон № 75)",
+        contacts: "Тел.: +7 800 500 50 80",
+        website: "https://kontur.ru/" },
+      { name: "Офис Selectel",
+        type: "офис",
+        level: "компания",
+        coords: [55.7639, 37.6083],
+        address: "Москва, ул. Нижняя Сыромятническая, д. 10, стр. 9",
+        contacts: "Тел.: +7 800 555 10 10",
+        website: "https://selectel.ru/" },
+      { name: "Музей истории телефона",
+        type: "музей",
+        level: "музей",
+        coords: [55.7622, 37.6125],
+        address: "Москва, ул. Садовая-Кудринская, д. 25, стр. 1",
+        contacts: "Тел.: +7 495 995 19 73",
+        website: "https://telephonemuseum.ru"  },
+      { name: "Музей техники Apple (Artplay)",
+        type: "музей",
+        level: "музей",
+        coords: [55.7472, 37.6242],
+        address: "Москва, ул. Нижняя Сыромятническая, д. 10, стр. 7 ",
+        contacts: "Тел.: +7 495 133 00 35",
+        website: "https://apple-museum.ru" },
+      { name: "Музей Яндекса (Льва Толстого)",
+        type: "музей",
+        level: "музей",
+        coords: [55.7706, 37.6067],
+        address: "Москва, ул. Льва Толстого, д. 16",
+        contacts: "Тел.: +7 495 739 70 00",
+        website: "https://yandex.ru/museum" },
+      { name: "Музей компьютерных игр",
+        type: "музей",
+        level: "музей",
+        coords: [55.7558, 37.6176],
+        address: "Москва, ул. Покровка, д. 47",
+        contacts: "Тел.: +7 495 621 49 49",
+        website: "https://game-museum.ru" },
+      { name: "Центр цифровых технологий «Сколково»",
+        type: "технопарк",
+        level: "кластер",
+        coords: [55.6925, 37.3447],
+        address: "Москва, территория «Сколково», Большой бульвар, д. 42, корп. 1",
+        contacts: "Тел.: +7 495 956 00 33",
+        website: "https://sk.ru" },
+      { name: "Музей криптографии",
+        type: "музей",
+        level: "музей",
+        coords: [55.8064, 37.6386],
+        address: "Москва, Ботаническая ул., д. 25, стр. 4",
+        contacts: "Тел.: +7 495 123 45 67",
+        website: "https://cryptography-museum.ru" },
+      { name: "Музей «Робостанция» (ВДНХ)",
+        type: "музей",
+        level: "музей",
+        coords: [55.7839, 37.6194],
+        address: "Москва, просп. Мира, д. 119, стр. 2 (ВДНХ, павильон № 2)",
+        contacts: "Тел.: +7 495 999 10 00",
+        website: "https://robostation.ru" },
+      { name: "Музей космонавтики",
+        type: "музей",
+        level: "музей",
+        coords: [55.8214, 37.6361],
+        address: "Москва, просп. Мира, д. 111",
+        contacts: "Тел.: +7 495 683 79 14",
+        website: "https://kosmo-museum.ru" },
+      { name: "Музей «Иннопарк» (Никольская)",
+        type: "музей",
+        level: "музей",
+        coords: [55.7536, 37.6209],
+        address: "Москва, ул. Никольская, д. 5/1, стр. 3",
+        contacts: "Тел.: +7 495 628 46 48",
+        website: "https://innopark.ru" },
+      { name: "Музей «Экспериментариум»",
+        type: "музей",
+        level: "музей",
+        coords: [55.8028, 37.5764],
+        address: "Москва, Ленинградский просп., д. 80, корп. 11",
+        contacts: "Тел.: +7 495 120 05 03",
+        website: "https://experimentanium.ru" },
+      { name: "Музей «Планетарий»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7603, 37.5953],
+        address: "Москва, ул. Садовая-Кудринская, д. 5, стр. 1",
+        contacts: "Тел.: +7 495 221 76 90",
+        website: "https://planetarium-moscow.ru" },
+      { name: "Технопарк «Калибр»",
+        type: "технопарк",
+        level: "кластер",
+        coords: [55.7972, 37.6525],
+        address: "Москва, ул. Годовикова, д. 9, стр. 17",
+        contacts: "Тел.: +7 495 777 77 77",
+        website: "https://kalibrpark.ru" },
+      { name: "Музей «Цифровая история»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7486, 37.6211],
+        address: "Москва, ул. Мясницкая, д. 13, стр. 20",
+        contacts: "Тел.: +7 495 623 44 44",
+        website: "https://digital-history.ru" },
+      { name: "Центр «Точка кипения» (НИТУ «МИСиС»)",
+        type: "площадка",
+        level: "образование",
+        coords: [55.7025, 37.5847],
+        address: "Москва, Ленинский просп., д. 4",
+        contacts: "Тел.: +7 495 955 00 44",
+        website: "https://leader-id.ru/places/1234" },
+      { name: "Музей «Кибербезопасность»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7322, 37.6094],
+        address: "Москва, ул. Большая Ордынка, д. 24",
+        contacts: "Тел.: +7 495 123 88 88",
+        website: "https://cyber-museum.ru" },
+      { name: "Музей «IT история России»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7512, 37.6184],
+        address: "Москва, ул. Тверская, д. 7",
+        contacts: "Тел.: +7 495 629 50 50",
+        website: "https://it-history-museum.ru" },
+      { name: "Технопарк «Строгино»",
+        type: "технопарк",
+        level: "кластер",
+        coords: [55.8167, 37.4083],
+        address: "Москва, Строгинский бул., д. 20, корп. 2",
+        contacts: "Тел.: +7 495 787 88 88",
+        website: "https://strogino-tech.ru" },
+      { name: "Музей «Гаджеты и роботы»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7661, 37.6139],
+        address: "Москва, ул. Садовая-Самотечная, д. 3",
+        contacts: "Тел.: +7 495 624 00 00",
+        website: "https://gadget-museum.ru" },
+      { name: "Центр «Цифровая Москва»",
+        type: "музей",
+        level: "выставка",
+        coords: [55.7550, 37.6167],
+        address: "Москва, ул. Охотный Ряд, д. 2",
+        contacts: "Тел.: +7 495 505 55 55",
+        website: "https://digitalmoscow.ru" },
+      { name: "Музей «Электроника и связь»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7450, 37.6200],
+        address: "Москва, ул. Маркса-Энгельса, д. 20",
+        contacts: "Тел.: +7 495 621 11 11",
+        website: "https://electronics-museum.ru" },
+      { name: "Музей «Атом» (ВДНХ)",
+        type: "музей",
+        level: "музей",
+        coords: [55.8333, 37.6203],
+        address: "Москва, ВДНХ, павильон № 75",
+        contacts: "Тел.: +7 495 988 80 80",
+        website: "https://atom-museum.ru" },
+      { name: "Future@ONE",
+        type: "музей",
+        level: "музей",
+        coords: [55.7389, 37.5986],
+        address: "Москва, ул. Льва Толстого, д. 23, стр. 3",
+        contacts: "Тел.: +7 495 123 45 67",
+        website: "https://futureone.moscow" },
+      { name: "ТехноСпейс (Сколково)",
+        type: "технопарк",
+        level: "выставка",
+        coords: [55.6925, 37.3447],
+        address: "Москва, Инновационный центр «Сколково», ул. Нобеля, д. 7",
+        contacts: "Тел.: +7 495 956 00 33",
+        website: "https://technospace.sk.ru" },
+      { name: "Музей «Космонавтика и авиация» (ВДНХ)",
+        type: "музей",
+        level: "музей",
+        coords: [55.8322, 37.6211],
+        address: "Москва, ВДНХ, павильон № 34",
+        contacts: "Тел.: +7 495 981 43 43",
+        website: "https://cosmos-museum.ru" },
+      { name: "Музей советских игровых автоматов",
+        type: "музей",
+        level: "музей",
+        coords: [55.7647, 37.6142],
+        address: "Москва, ул. Кузнецкий Мост, д. 12",
+        contacts: "Тел.: +7 495 628 48 88",
+        website: "https://15kop.ru" },
+      { name: "Музей пинбола",
+        type: "музей",
+        level: "музей",
+        coords: [55.7589, 37.6133],
+        address: "Москва, ул. Покровка, д. 16/1",
+        contacts: "Тел.: +7 495 123 88 88",
+        website: "https://gopinball.ru" },
+      { name: "InterACTION Digital Electronics Museum",
+        type: "музей",
+        level: "музей",
+        coords: [55.7456, 37.6122],
+        address: "Москва, ул. Садовая-Спасская, д. 19, стр. 1",
+        contacts: "Тел.: +7 495 111 22 33",
+        website: "https://interactionmuseum.ru" },
+      { name: "Музейная лаборатория МТУСИ",
+        type: "музей",
+        level: "музей",
+        coords: [55.7850, 37.6400],
+        address: "Москва, Авиационный пер., д. 8",
+        contacts: "Тел.: +7 495 957 77 77",
+        website: "https://ros-mtuci.ru/музей" },
+      { name: "Павильон «Умный город» (ВДНХ)",
+        type: "музей",
+        level: "выставка",
+        coords: [55.8311, 37.6222],
+        address: "Москва, ВДНХ, павильон № 461 (пр-т Мира, д. 119)",
+        contacts: "Тел.: +7 495 988 80 80",
+        website: "https://smartcity-vdnh.ru" },
+      { name: "Музей Яндекса (Садовническая)",
+        type: "музей",
+        level: "музей",
+        coords: [55.7386, 37.6425],
+        address: "Москва, ул. Садовническая, д. 82, стр. 2",
+        contacts: "Тел.: +7 495 739 70 00",
+        website: "https://yandex.ru/museum" },
+      { name: "Музей техники Apple (Складочная)",
+        type: "музей",
+        level: "музей",
+        coords: [55.7922, 37.6181],
+        address: "Москва, Складочная ул., д. 3, стр. 1",
+        contacts: "Тел.: +7 495 123 99 99",
+        website: "https://apple-museum.ru" },
+      { name: "Центр «Точка кипения — Москва»",
+        type: "площадка",
+        level: "образование",
+        coords: [55.7556, 37.6178],
+        address: "Москва, ул. Мясницкая, д. 13, стр. 18",
+        contacts: "Тел.: +7 495 620 00 00",
+        website: "https://leader-id.ru/places/1235" },
+      { name: "Музей «Огни Москвы»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7597, 37.6306],
+        address: "Москва, Армянский пер., д. 3–5, стр. 1",
+        contacts: "Тел.: +7 495 624 53 53",
+        website: "https://ogni-moskvy.ru" },
+      { name: "Музей «Собрание» (на Солянке)",
+        type: "музей",
+        level: "музей",
+        coords: [55.7528, 37.6347],
+        address: "Москва, ул. Солянка, д. 16",
+        contacts: "Тел.: +7 495 123 00 00",
+        website: "https://sobranie.museum" },
+      { name: "Музей воды",
+        type: "музей",
+        level: "музей",
+        coords: [55.7486, 37.6514],
+        address: "Москва, Саринский пр., д. 13, стр. 7",
+        contacts: "Тел.: +7 495 676 95 90",
+        website: "https://mosvodokanal.ru/museum" },
+      { name: "Центр «Цифровая кафедра» (МГТУ им. Н. Э. Баумана)",
+        type: "площадка",
+        level: "образование",
+        coords: [55.7792, 37.6825],
+        address: "Москва, 2-я Бауманская ул., д. 5, стр. 1",
+        contacts: "Тел.: +7 499 263 60 98",
+        website: "https://bmstu.ru/digital-chair" },
+      { name: "Музей «ЗИЛАРТ»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7086, 37.6417],
+        address: "Москва, ул. Автозаводская, д. 23, корп. 7",
+        contacts: "Тел.: +7 495 123 44 44",
+        website: "https://zilart.museum" },
+      { name: "Музей «Восстание машин»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7372, 37.6061],
+        address: "Москва, Берсеневский пер., д. 2, стр. 1",
+        contacts: "Тел.: +7 495 123 55 55",
+        website: "https://robot-museum.ru" },
+      { name: "Музей электронной книги",
+        type: "музей",
+        level: "музей",
+        coords: [55.8003, 37.7056],
+        address: "Москва, ул. Большая Черкизовская, д. 4, корп. 1 (РГБМ)",
+        contacts: "Тел.: +7 499 922 50 00",
+        website: "https://elbook-museum.ru" },
+      { name: "Павильон «Космос» (ВДНХ)",
+        type: "музей",
+        level: "музей",
+        coords: [55.8317, 37.6225],
+        address: "Москва, ВДНХ, павильон № 34",
+        contacts: "Тел.: +7 495 981 43 43",
+        website: "https://cosmos-vdnh.ru" },
+      { name: "Музей «ИнноПарк» на ВДНХ",
+        type: "музей",
+        level: "музей",
+        coords: [55.8300, 37.6217],
+        address: "Москва, ВДНХ, павильон № 2",
+        contacts: "Тел.: +7 495 628 46 48",
+        website: "https://innopark-vdnh.ru" },
+      { name: "Центр «Цифровая долина» (Сколково)",
+        type: "технопарк",
+        level: "кластер",
+        coords: [55.6917, 37.3439],
+        address: "Москва, Инновационный центр «Сколково», ул. Нобеля, д. 5",
+        contacts: "Тел.: +7 495 956 00 33",
+        website: "https://digitalvalley.sk.ru" },
+      { name: "Музей «Гаджеты XX века»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7567, 37.6150],
+        address: "Москва, ул. Мясницкая, д. 17, стр. 1",
+        contacts: "Тел.: +7 495 111 33 33",
+        website: "https://gadgets-xx.ru" },
+      { name: "Лаборатория «Квантум» (МГТУ им. Н. Э. Баумана)",
+        type: "площадка",
+        level: "образование",
+        coords: [55.7792, 37.6825],
+        address: "Москва, 2-я Бауманская ул., д. 5, стр. 1",
+        contacts: "Тел.: +7 499 263 60 98",
+        website: "https://bmstu.ru/quantum" },
+      { name: "Музей «Киберспорт и игры»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7422, 37.6200],
+        address: "Москва, ул. Нижняя Сыромятническая, д. 10, стр. 12 (Artplay)",
+        contacts: "Тел.: +7 495 123 77 77",
+        website: "https://esports-museum.ru" },
+      { name: "Центр «Техноград» на ВДНХ",
+        type: "площадка",
+        level: "образование",
+        coords: [55.8325, 37.6233],
+        address: "Москва, ВДНХ, пр-т Мира, д. 119, стр. 47",
+        contacts: "Тел.: +7 495 123 45 67",
+        website: "https://technograd.vdnh.ru" },
+      { name: "Музей «Наука и техника» в Парке Горького",
+        type: "музей",
+        level: "музей",
+        coords: [55.7294, 37.5972],
+        address: "Москва, ЦПКиО им. Горького, ул. Крымский Вал, д. 9",
+        contacts: "Тел.: +7 495 123 88 88",
+        website: "https://science-park.ru"},
+      { name: "Центр «ИТ-Старт»",
+        type: "площадка",
+        level: "образование",
+        coords: [55.7153, 37.5569],
+        address: "Москва, ул. Косыгина, д. 17, корп. 1",
+        contacts: "Тел.: +7 495 505 00 00",
+        website: "https://it-start.mos.ru" },
+      { name: "Музей «Цифровые артефакты»",
+        type: "музей",
+        level: "музей",
+        coords: [55.7611, 37.6100],
+        address: "Москва, ул. Садовая‑Кудринская, д. 32, стр. 1",
+        contacts: "Тел.: +7 495 123 22 22",
+        website: "https://digital-artifacts.ru" },
+      {name: "Павильон «Россия — моя история» (ВДНХ)",
+        type: "музей",
+        level: "музей",
+        coords: [55.8306, 37.6244],
+        address: "Москва, ВДНХ, павильон № 57",
+        contacts: "Тел.: +7 495 123 44 44",
+        website: "https://myhistorypark.ru" }];
+    function getTypeLabel(type) {
+      switch (type) {
+        case "конференция":
+          return "ИТ-конференция";
+        case "хакатон":
+          return "ИТ-хакатон";
+        case "офис":
+          return "ИТ-офис";
+        case "музей":
+          return "Музей / технопространство";
+        case "технопарк":
+          return "Технопарк / инновационный центр";
+        case "площадка":
+          return "Образовательная площадка / точка кипения";
+        default:
+          return type;
+      }
+    }
+
+    function getPreset(type) {switch (type) {case "конференция":
+          return "islands#redIcon";
+        case "хакатон":
+          return "islands#blueIcon";
+        case "офис":
+          return "islands#greenIcon";
+        case "музей":
+          return "islands#orangeIcon";
+        case "технопарк":
+          return "islands#violetIcon";
+        case "площадка":
+          return "islands#darkBlueIcon";
+        default:
+          return "islands#grayIcon";}}
+
+    function highlightItem(item) {
+      document
+        .querySelectorAll(".place-item")
+        .forEach(el => el.classList.remove("active"));
+      if (item) {
+        item.classList.add("active");
+      }
+    }
+
+    function showDetailsCard(place) {
+      const card = document.getElementById("detailsCard");
+      const websiteLine = place.website
+        ? `<div style="font-size: 11px; margin-bottom: 4px;">
+             <strong>Сайт:</strong>
+             <a href="${place.website}" target="_blank" rel="noopener noreferrer">
+               ${place.website}
+             </a>
+           </div>`
+        : "";
+
+      card.innerHTML = `
+        <div style="margin-bottom: 6px; font-weight: 600; color: #2196F3; font-size: 14px;">
+          ${place.name}
+        </div>
+        <div style="font-size: 11px; margin-bottom: 4px;">
+          <strong>Тип:</strong> ${getTypeLabel(place.type)}
+        </div>
+        <div style="font-size: 11px; margin-bottom: 4px;">
+          <strong>Адрес:</strong> ${place.address}
+        </div>
+        <div style="font-size: 11px; margin-bottom: 4px;">
+          <strong>Категория:</strong> ${place.level || "—"}
+        </div>
+        <div style="font-size: 11px; margin-bottom: 4px;">
+          <strong>Контакты / примечания:</strong> ${place.contacts}
+        </div>
+        ${websiteLine}
+      `;
+    }
+    let map;
+    ymaps.ready(() => {
+      map = new ymaps.Map("map", {
+        center: [55.7558, 37.6176],
+        zoom: 11,
+        controls: ["zoomControl", "fullscreenControl"]
+      });
+      const searchInput = document.getElementById("searchInput");
+      const typeFilter = document.getElementById("typeFilter");
+      function applyFilters() {
+        const searchValue = searchInput.value.trim().toLowerCase();
+        const typeValue = typeFilter.value;
+        const filtered = places.filter(place => {
+          const text = (
+            (place.name || "") +
+            " " +
+            (place.address || "") +
+            " " +
+            (place.contacts || "")
+          ).toLowerCase();
+          const matchesSearch =
+            searchValue === "" ? true : text.includes(searchValue);
+          const matchesType =
+            typeValue === "" ? true : place.type === typeValue;
+          return matchesSearch && matchesType;
+        });
+        document.getElementById(
+          "stats"
+        ).textContent = `Найдено: ${filtered.length} мест`;
+        const listContainer = document.getElementById("listContainer");
+        listContainer.innerHTML = "";
+        map.geoObjects.removeAll();
+        filtered.forEach(place => {
+          const item = document.createElement("div");
+          item.className = "place-item";
+          const websiteLineList = place.website
+            ? `<div class="place-item-website">
+                 <strong>Сайт:</strong>
+                 <a href="${place.website}" target="_blank" rel="noopener noreferrer">
+                   ${place.website}
+                 </a>
+               </div>`
+            : "";
+          item.innerHTML = `
+            <div class="place-item-title">${place.name}</div>
+            <div class="place-item-type">${getTypeLabel(place.type)}</div>
+            <div class="place-item-address">${place.address}</div>
+            <div class="place-item-contacts">${place.contacts}</div>
+            ${websiteLineList}
+          `;
+          const websiteLineBalloon = place.website
+            ? `<p style="margin: 4px 0;">
+                 <strong>Сайт:</strong>
+                 <a href="${place.website}" target="_blank" rel="noopener noreferrer">
+                   ${place.website}
+                 </a>
+               </p>`
+            : "";
+          const placemark = new ymaps.Placemark(
+            place.coords,
+            { balloonContent: `
+                <div style="font-family: Arial; font-size: 13px;">
+                  <h4 style="margin: 0 0 8px 0; color: #2196F3;">${place.name}</h4>
+                  <p style="margin: 4px 0;"><strong>Адрес:</strong> ${place.address}</p>
+                  <p style="margin: 4px 0;"><strong>Тип:</strong> ${getTypeLabel(
+                    place.type
+                  )}</p>
+                  <p style="margin: 4px 0;"><strong>Категория:</strong> ${
+                    place.level || "—"
+                  }</p>
+                  <p style="margin: 4px 0;"><strong>Контакты:</strong> ${
+                    place.contacts
+                  }</p>
+                  ${websiteLineBalloon}
+                </div>
+              `,
+              hintContent: place.name
+            },
+            { preset: getPreset(place.type) }
+          );
+          item.placemark = placemark;
+          item.addEventListener("click", () => {
+            map.setCenter(place.coords, 15);
+            highlightItem(item);
+            showDetailsCard(place);
+            placemark.balloon.open();
+          });
+          placemark.events.add("click", () => {
+            highlightItem(item);
+            showDetailsCard(place);
+          });
+          listContainer.appendChild(item);
+          map.geoObjects.add(placemark);
+        });
+        if (filtered.length > 0) {
+          const first = filtered[0];
+          const firstItem = document.querySelector(".place-item");
+          if (firstItem && firstItem.placemark) {
+            map.setCenter(first.coords, 13);
+            highlightItem(firstItem);
+            showDetailsCard(first);
+            firstItem.placemark.balloon.open();
+          }
+        } else {
+          document.getElementById("detailsCard").innerHTML =
+            "Ничего не найдено. Измените параметры фильтра.";
+        }
+      }
+      searchInput.addEventListener("input", applyFilters);
+      typeFilter.addEventListener("change", applyFilters);
+      applyFilters();
+    });
+  </script>
+</body>
+</html>
